@@ -1,2 +1,3 @@
 # Spotifree
-A Spotify song/playlist downloader through pytubefix
+Spotify song/playlist downloader command line tool.
+Uses pytubefix under the hood

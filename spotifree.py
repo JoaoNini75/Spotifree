@@ -1,15 +1,20 @@
 from pytubefix import Search, YouTube, Channel
 from pytubefix.cli import on_progress
 import requests 
+import os
 
 
-def downloadAudio(url):
+acessToken = ""
+
+
+def downloadAudio(url, dir=""):
     yt = YouTube(url, on_progress_callback=on_progress)
     #print(yt.streams.filter(only_audio=True))
     print("\nDownloading: " + yt.title + "\nlink: " + url)
 
     stream = yt.streams.get_by_itag(251)
-    stream.download(output_path="MyMusic")
+    path = "SpotifreeLibrary" + dir
+    stream.download(output_path=path)
     #ys = yt.streams.get_audio_only()
     #ys.download(output_path="songs")
 
@@ -58,45 +63,67 @@ def getSongTitle(link):
         spotifyId = spotifyId.split("?")[0]
 
     requestLink = "https://api.spotify.com/v1/tracks/" + spotifyId
-    token = "" # todo!!!
-    headers = {"Authorization": "Bearer  " + token}
+    headers = {"Authorization": "Bearer  " + acessToken}
     response = requests.get(requestLink, headers=headers)
 
-    print("api get track: " + str(response.status_code))
+    statusCode = str(response.status_code)
+    print("api get track: " + statusCode)
+    if statusCode == "401":
+        authenticateSpotifyAPI()
+        return getSongTitle(link)
+
     json = response.json()
     song = json["name"]
     artist = json["artists"][0]["name"]
     return song + " " + artist
 
 
-def getSongsTitles(link):
+def getPlaylist(link):
     # https://open.spotify.com/playlist/00LFxfOUZMurohHqzE2nFP?si=ea90148f3d4344fd
     spotifyId = link.split("playlist/")[1]
     if "?" in spotifyId:
         spotifyId = spotifyId.split("?")[0]
 
-    requestLink = "https://api.spotify.com/v1/playlists/" + spotifyId + "/tracks"
-    token = "" # todo!!!
-    headers = {"Authorization": "Bearer  " + token}
+    requestLink = "https://api.spotify.com/v1/playlists/" + spotifyId
+    headers = {"Authorization": "Bearer  " + acessToken}
 
-    fields = "items(track(name,artists(name)))"
+    fields = "name,tracks(total,items(track(name,artists(name))))"
     limit = 50
-    offset = 0 # todo!!!
+    offset = 0 
     payload = {"fields": fields, "limit": limit, "offset": offset}
 
     response = requests.get(requestLink, headers=headers, params=payload)
+    statusCode = str(response.status_code)
+    print("api get playlist tracks: " + statusCode)
+    if statusCode == "401":
+        authenticateSpotifyAPI()
+        return getPlaylist(link)
 
-    print("api get playlist tracks: " + str(response.status_code))
-    json = response.json()["items"]
+    json = response.json()
+    playlistName = json["name"]
+    songs = json["tracks"]["items"]
+    totalSongNum = json["tracks"]["total"]
 
+    while totalSongNum > len(songs):
+        fields = "tracks(items(track(name,artists(name))))"
+        offset += 50
+        payload = {"fields": fields, "limit": limit, "offset": offset}
+        response = requests.get(requestLink, headers=headers, params=payload)
+        json = response.json()
+        songs += json["tracks"]["items"]
+
+    info = {}
     songsTitles = []
 
-    for song in json:
+    for song in songs:
         title = song["track"]["name"] + " " # song name
         title += song["track"]["artists"][0]["name"] # first artist name
         songsTitles.append(title)
 
-    return songsTitles
+    info["songsTitles"] = songsTitles
+    info["title"] = playlistName
+
+    return info
 
 
 def searchYoutubeManually():
@@ -116,19 +143,64 @@ def searchYoutubeManually():
 
 
 def donwloadSpotifySong():
+    authenticateSpotifyAPI()
+
     songSpotifyLink = input("Spotify song link: ")
     songTitle = getSongTitle(songSpotifyLink)
     print("songTitle: " + songTitle)
+
     url = findFirstYoutubeLink(songTitle)
     downloadAudio(url)
 
 
 def downloadSpotifyPlaylist():
+    authenticateSpotifyAPI()
     playlistLink = input("Spotify playlist link: ")
-    songsNames = getSongsTitles(playlistLink) 
-    for songName in songsNames:
-        url = findFirstYoutubeLink(songName)
-        downloadAudio(url)
+    playlistInfo = getPlaylist(playlistLink) 
+    songsTitles = playlistInfo["songsTitles"]
+    playlistTitle = playlistInfo["title"]
+
+    print("playlist title: " + playlistTitle)
+    print("playlist song num: " + str(len(songsTitles)) + "\n")
+    playlistDir = "/" + playlistTitle
+
+    for songTitle in songsTitles:
+        print(songTitle)
+        #url = findFirstYoutubeLink(songTitle)
+        #downloadAudio(url, playlistDir)
+
+
+def readTokenFromFile():
+    f = open("acessToken.txt", "r")
+    token = f.read()
+    f.close()
+    if not token == "":
+        print("token read from file")
+    return token
+
+def writeTokenToFile(token):
+    f = open("acessToken.txt", "w")
+    f.write(token)
+    f.close()
+
+
+def authenticateSpotifyAPI():
+    global acessToken
+    acessToken = readTokenFromFile()
+    if not acessToken == "":
+        return
+
+    clientId = os.environ["SPOTIFREE_CLIENT_ID"]
+    clientSecret = os.environ["SPOTIFREE_CLIENT_SECRET"]
+
+    requestLink = "https://accounts.spotify.com/api/token"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    body = {"grant_type": "client_credentials", "client_id": clientId, "client_secret": clientSecret}
+    response = requests.post(requestLink, headers=headers, data=body)
+
+    print("api authentication: " + str(response.status_code))
+    acessToken = response.json()["access_token"]
+    writeTokenToFile(acessToken)
 
 
 def printOptions():

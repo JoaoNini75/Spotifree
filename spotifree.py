@@ -1,10 +1,11 @@
 from pytubefix import Search, YouTube, Channel
 from pytubefix.cli import on_progress
+import requests 
 
 
 def downloadAudio(url):
     yt = YouTube(url, on_progress_callback=on_progress)
-    print(yt.streams.filter(only_audio=True))
+    #print(yt.streams.filter(only_audio=True))
     print("\nDownloading: " + yt.title + "\nlink: " + url)
 
     stream = yt.streams.get_by_itag(251)
@@ -50,8 +51,52 @@ def searchYoutubeLinks(query, max_results):
     return results.videos[opt].watch_url
 
 
-def getSongTitleFromSpotifyLink(link):
-    print("todo")
+def getSongTitle(link):
+    # https://open.spotify.com/intl-pt/track/4fiOTntQKr24p07FvQDHZE?si=840a4f2c981242e5
+    spotifyId = link.split("track/")[1]
+    if "?" in spotifyId:
+        spotifyId = spotifyId.split("?")[0]
+
+    requestLink = "https://api.spotify.com/v1/tracks/" + spotifyId
+    token = "" # todo!!!
+    headers = {"Authorization": "Bearer  " + token}
+    response = requests.get(requestLink, headers=headers)
+
+    print("api get track: " + str(response.status_code))
+    json = response.json()
+    song = json["name"]
+    artist = json["artists"][0]["name"]
+    return song + " " + artist
+
+
+def getSongsTitles(link):
+    # https://open.spotify.com/playlist/00LFxfOUZMurohHqzE2nFP?si=ea90148f3d4344fd
+    spotifyId = link.split("playlist/")[1]
+    if "?" in spotifyId:
+        spotifyId = spotifyId.split("?")[0]
+
+    requestLink = "https://api.spotify.com/v1/playlists/" + spotifyId + "/tracks"
+    token = "" # todo!!!
+    headers = {"Authorization": "Bearer  " + token}
+
+    fields = "items(track(name,artists(name)))"
+    limit = 50
+    offset = 0 # todo!!!
+    payload = {"fields": fields, "limit": limit, "offset": offset}
+
+    response = requests.get(requestLink, headers=headers, params=payload)
+
+    print("api get playlist tracks: " + str(response.status_code))
+    json = response.json()["items"]
+
+    songsTitles = []
+
+    for song in json:
+        title = song["track"]["name"] + " " # song name
+        title += song["track"]["artists"][0]["name"] # first artist name
+        songsTitles.append(title)
+
+    return songsTitles
 
 
 def searchYoutubeManually():
@@ -59,7 +104,10 @@ def searchYoutubeManually():
     query = input("Search: ")
     url = ""
 
-    if (resultNum == 1):
+    if (resultNum < 1):
+        print("Bruh")
+        return
+    elif (resultNum == 1):
         url = findFirstYoutubeLink(query)
     else:
         url = searchYoutubeLinks(query, resultNum)
@@ -69,16 +117,18 @@ def searchYoutubeManually():
 
 def donwloadSpotifySong():
     songSpotifyLink = input("Spotify song link: ")
-    songTitle = getSongTitleFromSpotifyLink(songSpotifyLink)
+    songTitle = getSongTitle(songSpotifyLink)
+    print("songTitle: " + songTitle)
     url = findFirstYoutubeLink(songTitle)
     downloadAudio(url)
 
 
 def downloadSpotifyPlaylist():
-    #query = input("Spotify playlist link: ")
-    #url = search(query)
-    #downloadAudio(url)
-    print("Not implemented yet.")
+    playlistLink = input("Spotify playlist link: ")
+    songsNames = getSongsTitles(playlistLink) 
+    for songName in songsNames:
+        url = findFirstYoutubeLink(songName)
+        downloadAudio(url)
 
 
 def printOptions():

@@ -4,7 +4,7 @@ import requests
 import os
 
 
-acessToken = ""
+spotifyToken = ""
 
 
 def downloadAudio(url, dir=""):
@@ -63,13 +63,13 @@ def getSongTitle(link):
         spotifyId = spotifyId.split("?")[0]
 
     requestLink = "https://api.spotify.com/v1/tracks/" + spotifyId
-    headers = {"Authorization": "Bearer  " + acessToken}
+    headers = {"Authorization": "Bearer  " + spotifyToken}
     response = requests.get(requestLink, headers=headers)
 
     statusCode = str(response.status_code)
     print("api get track: " + statusCode)
     if statusCode == "401":
-        authenticateSpotifyAPI()
+        authenticateSpotifyAPI(True)
         return getSongTitle(link)
 
     json = response.json()
@@ -85,7 +85,7 @@ def getPlaylist(link):
         spotifyId = spotifyId.split("?")[0]
 
     requestLink = "https://api.spotify.com/v1/playlists/" + spotifyId
-    headers = {"Authorization": "Bearer  " + acessToken}
+    headers = {"Authorization": "Bearer  " + spotifyToken}
 
     fields = "name,tracks(total,items(track(name,artists(name))))"
     limit = 50
@@ -96,21 +96,26 @@ def getPlaylist(link):
     statusCode = str(response.status_code)
     print("api get playlist tracks: " + statusCode)
     if statusCode == "401":
-        authenticateSpotifyAPI()
+        authenticateSpotifyAPI(True)
         return getPlaylist(link)
 
     json = response.json()
     playlistName = json["name"]
     songs = json["tracks"]["items"]
     totalSongNum = json["tracks"]["total"]
+    print("totalSongNum: " + str(totalSongNum))
 
+    # TODO: playlist com 50+ musicas, musica not found, age restriction
+
+    '''
     while totalSongNum > len(songs):
         fields = "tracks(items(track(name,artists(name))))"
         offset += 50
         payload = {"fields": fields, "limit": limit, "offset": offset}
         response = requests.get(requestLink, headers=headers, params=payload)
         json = response.json()
-        songs += json["tracks"]["items"]
+        songs += json["tracks"]["items"]'
+    '''
 
     info = {}
     songsTitles = []
@@ -171,7 +176,7 @@ def downloadSpotifyPlaylist():
 
 
 def readTokenFromFile():
-    f = open("acessToken.txt", "r")
+    f = open("spotifyToken.txt", "r")
     token = f.read()
     f.close()
     if not token == "":
@@ -179,17 +184,18 @@ def readTokenFromFile():
     return token
 
 def writeTokenToFile(token):
-    f = open("acessToken.txt", "w")
+    f = open("spotifyToken.txt", "w")
     f.write(token)
     f.close()
 
 
-def authenticateSpotifyAPI():
-    global acessToken
-    acessToken = readTokenFromFile()
-    if not acessToken == "":
+def authenticateSpotifyAPI(tokenExpired=False):
+    global spotifyToken
+    spotifyToken = readTokenFromFile()
+    if not spotifyToken == "" and not tokenExpired:
         return
-
+    
+    print("authenticating in Spotify API...")
     clientId = os.environ["SPOTIFREE_CLIENT_ID"]
     clientSecret = os.environ["SPOTIFREE_CLIENT_SECRET"]
 
@@ -199,8 +205,8 @@ def authenticateSpotifyAPI():
     response = requests.post(requestLink, headers=headers, data=body)
 
     print("api authentication: " + str(response.status_code))
-    acessToken = response.json()["access_token"]
-    writeTokenToFile(acessToken)
+    spotifyToken = response.json()["access_token"]
+    writeTokenToFile(spotifyToken)
 
 
 def printOptions():

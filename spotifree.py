@@ -187,9 +187,9 @@ def downloadSpotifyPlaylist():
     if confirmation.lower() == "n":
         return
     
-    #for songTitle in songsTitles:
-        #url = findFirstYoutubeLink(songTitle)
-        #downloadAudio(url, playlistDir)
+    for songTitle in songsTitles:
+        url = findFirstYoutubeLink(songTitle)
+        downloadAudio(url, playlistDir)
 
 
 def readTokenFromFile():

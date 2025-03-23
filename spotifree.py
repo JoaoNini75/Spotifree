@@ -2,12 +2,17 @@ from pytubefix import Search, YouTube, Channel
 from pytubefix.cli import on_progress
 import requests 
 import os
+import math
 
+# TODO:
+# song not found
+# age restriction
 
+API_PLAYLIST_SONG_LIMIT = 100
 spotifyToken = ""
 
 
-def downloadAudio(url, dir=""):
+def downloadAudio(url, dir="/songs"):
     yt = YouTube(url, on_progress_callback=on_progress)
     #print(yt.streams.filter(only_audio=True))
     print("\nDownloading: " + yt.title + "\nlink: " + url)
@@ -86,9 +91,8 @@ def getPlaylist(link):
 
     requestLink = "https://api.spotify.com/v1/playlists/" + spotifyId
     headers = {"Authorization": "Bearer  " + spotifyToken}
-
     fields = "name,tracks(total,items(track(name,artists(name))))"
-    limit = 50
+    limit = API_PLAYLIST_SONG_LIMIT
     offset = 0 
     payload = {"fields": fields, "limit": limit, "offset": offset}
 
@@ -103,19 +107,26 @@ def getPlaylist(link):
     playlistName = json["name"]
     songs = json["tracks"]["items"]
     totalSongNum = json["tracks"]["total"]
-    print("totalSongNum: " + str(totalSongNum))
 
-    # TODO: playlist com 50+ musicas, musica not found, age restriction
+    additionalRequestNum = math.ceil((totalSongNum - API_PLAYLIST_SONG_LIMIT) / API_PLAYLIST_SONG_LIMIT)
+    #print("totalSongNum: " + str(totalSongNum))
+    #print("additionalRequestNum: " + str(additionalRequestNum))
 
-    '''
-    while totalSongNum > len(songs):
-        fields = "tracks(items(track(name,artists(name))))"
-        offset += 50
+    fields = "items(track(name,artists(name)))"
+    requestLink += "/tracks"
+
+    for addtReq in range(additionalRequestNum):
+        offset += API_PLAYLIST_SONG_LIMIT
         payload = {"fields": fields, "limit": limit, "offset": offset}
         response = requests.get(requestLink, headers=headers, params=payload)
+    
+        #print("additional Request num " + str(addtReq+1) + " status code: " + str(response.status_code))
+        #print("offset: " + str(offset))
+        #print("limit: " + str(limit) + "\n")
+
         json = response.json()
-        songs += json["tracks"]["items"]'
-    '''
+        #print(json)
+        songs += json["items"]
 
     info = {}
     songsTitles = []
@@ -161,16 +172,22 @@ def donwloadSpotifySong():
 def downloadSpotifyPlaylist():
     authenticateSpotifyAPI()
     playlistLink = input("Spotify playlist link: ")
+
     playlistInfo = getPlaylist(playlistLink) 
     songsTitles = playlistInfo["songsTitles"]
     playlistTitle = playlistInfo["title"]
+    playlistDir = "/playlists/" + playlistTitle
 
-    print("playlist title: " + playlistTitle)
-    print("playlist song num: " + str(len(songsTitles)) + "\n")
-    playlistDir = "/" + playlistTitle
+    print("\nTitle: " + playlistTitle)
+    print("Number of songs: " + str(len(songsTitles)))
+    print("First song title: " + songsTitles[0])
+    print("Last song title: " + songsTitles[len(songsTitles)-1])
 
-    for songTitle in songsTitles:
-        print(songTitle)
+    confirmation = input("\nAre these informations correct (y/n)? ")
+    if confirmation.lower() == "n":
+        return
+    
+    #for songTitle in songsTitles:
         #url = findFirstYoutubeLink(songTitle)
         #downloadAudio(url, playlistDir)
 
@@ -232,7 +249,7 @@ def main():
             
         print("\n")        
 
-    print("Finished")
+    print("Finished.")
 
 
 main()

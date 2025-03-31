@@ -1,13 +1,101 @@
 from pytubefix import Search, YouTube, Channel
 from pytubefix.cli import on_progress
-import requests, os, math, re
+from flask import Flask, request, redirect
+import requests, os, math, re, os.path, webbrowser, threading, time, urllib.parse, base64
+
 
 # TODO:
+# refresh token
 # song not found -> enable another itag?
-# age restriction
+# age restriction?
+
+
+SPOTIFREE_CLIENT_ID = os.environ["SPOTIFREE_CLIENT_ID"]
+SPOTIFREE_CLIENT_SECRET = os.environ["SPOTIFREE_CLIENT_SECRET"]
+SPOTIFREE_REDIRECT_URI = "http://127.0.0.1:3000/callback"
+SCOPES = "playlist-read-private playlist-read-collaborative"
+SPOTIFY_TOKEN_FILENAME = "spotifyToken.txt"
 
 API_PLAYLIST_SONG_LIMIT = 100
+API_USER_PLAYLIST_LIMIT = 50
+
 spotifyToken = ""
+app = Flask(__name__)
+auth_code_event = threading.Event() # Event to signal when the auth code is received
+auth_code = None
+
+
+def run_flask():
+    app.run(port=3000, threaded=True)
+
+
+@app.route("/")
+def loginSpotify():
+    auth_url = "https://accounts.spotify.com/authorize?"
+    params = {
+        "client_id": SPOTIFREE_CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": SPOTIFREE_REDIRECT_URI,
+        "scope": SCOPES
+    }
+    return redirect(auth_url + urllib.parse.urlencode(params))
+
+
+@app.route("/callback")
+def callback():
+    global auth_code
+
+    auth_code = request.args.get("code")
+    if not auth_code:
+        return "Error: No authorization code received."
+
+    # Signal the main thread that auth code is received
+    auth_code_event.set()
+
+    return "Authorization successful! You can close this window and return to the CLI."
+
+
+def requestUserAuthorization():
+    global auth_code
+    global spotifyToken
+
+    spotifyToken = readTokenFromFile()
+    if not spotifyToken == "":
+        return
+
+    # Start Flask server in a separate thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Open the authorization URL in the user's browser
+    time.sleep(1)  # Give Flask a moment to start
+    webbrowser.open(f"http://127.0.0.1:3000/")
+
+    # Wait for user authorization with timeout
+    if not auth_code_event.wait(timeout=60):  # Wait up to 60 seconds
+        print("Error: Authorization timed out.")
+        return
+
+    # Exchange authorization code for an access token
+    token_url = "https://accounts.spotify.com/api/token"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {
+        "grant_type": "authorization_code",
+        "code": auth_code,
+        "redirect_uri": SPOTIFREE_REDIRECT_URI,
+        "client_id": SPOTIFREE_CLIENT_ID,
+        "client_secret": SPOTIFREE_CLIENT_SECRET
+    }
+
+    response = requests.post(token_url, headers=headers, data=data)
+    print("Token exchange status: ", response.status_code)
+
+    if response.status_code == 200:
+        token_data = response.json()
+        spotifyToken = token_data["access_token"]
+        writeTokenToFile(spotifyToken)
+    else:
+        print("Error:\n", response.json())
 
 
 def sanitizePlaylistname(dir_name: str) -> str:
@@ -127,7 +215,7 @@ def getPlaylist(link):
         return getPlaylist(link)
 
     if statusCode == "404":
-        print("It is not possible to download this playlist :(")
+        print("It is not possible to download a private or Spotify-owned playlist :(")
         return {}
 
     json = response.json()
@@ -204,9 +292,9 @@ def donwloadSpotifySong():
         idx += 1
 
     if success:
-        print("Song downloaded successfully.")
+        print("\n\nSong downloaded successfully.")
     else:
-        print("It was not possible to download this song. Please search Youtube manually (option 1).")
+        print("\n\nIt was not possible to download this song. Please search Youtube manually (option 1).")
 
 
 def downloadSpotifyPlaylist():
@@ -246,48 +334,83 @@ def downloadSpotifyPlaylist():
             songsNotFound.append(songTitle)
 
     if songsNotFound == []:
-        print("\nPlaylist downloaded successfully to folder: " + sanitizedPlaylistTitle)
+        print("\n\nPlaylist downloaded successfully to folder: " + sanitizedPlaylistTitle)
     else:
-        print(f"It was not possible to download these {len(songsNotFound)} songs. "
+        print(f"\n\nIt was not possible to download these {len(songsNotFound)} songs. "
             "Please search Youtube manually (option 1).\n")
 
         for songTitle in songsNotFound:
             print(songTitle)
 
 
+def downloadUserPlaylists():
+    requestUserAuthorization()
+    print("downloadUserPlaylists")
+    # authenticateSpotifyAPI(authorizationCode=True)
+
+    requestLink = "https://api.spotify.com/v1/me/playlists"
+    headers = {"Authorization": "Bearer  " + spotifyToken}
+    payload = {"limit": API_USER_PLAYLIST_LIMIT, "offset": 0}
+
+    response = requests.get(requestLink, headers=headers, params=payload)
+    statusCode = str(response.status_code)
+    print("API get user playlists: " + statusCode)
+
+    if statusCode == "401":
+        authenticateSpotifyAPI(True)
+        return downloadUserPlaylists()
+
+    json = response.json()
+    print(json)
+
+
 def readTokenFromFile():
-    f = open("spotifyToken.txt", "r")
+    if not os.path.isfile(SPOTIFY_TOKEN_FILENAME):
+        f = open(SPOTIFY_TOKEN_FILENAME, "x")
+        f.close()
+        return ""
+
+    f = open(SPOTIFY_TOKEN_FILENAME, "r")
     token = f.read()
     f.close()
 
-    if not token == "":
-        print("Token read from file.")
+    #if not token == "":
+        # print("Token read from file.")
 
     return token
 
 def writeTokenToFile(token):
-    f = open("spotifyToken.txt", "w")
+    f = open(SPOTIFY_TOKEN_FILENAME, "w")
     f.write(token)
     f.close()
 
 
-def authenticateSpotifyAPI(tokenExpired=False):
+def authenticateSpotifyAPI(tokenExpired=False, authorizationCode=False):
     global spotifyToken
     spotifyToken = readTokenFromFile()
     if not spotifyToken == "" and not tokenExpired:
         return
     
-    print("authenticating in Spotify API...")
+    # print("authenticating in Spotify API...")
     clientId = os.environ["SPOTIFREE_CLIENT_ID"]
     clientSecret = os.environ["SPOTIFREE_CLIENT_SECRET"]
 
     requestLink = "https://accounts.spotify.com/api/token"
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    body = {"grant_type": "client_credentials", "client_id": clientId, "client_secret": clientSecret}
+
+    if authorizationCode:
+        headers = {"Content-Type": "application/x-www-form-urlencoded",
+                   "Authorization": 'Basic ' + base64.b64encode((f"{SPOTIFREE_CLIENT_ID}:{SPOTIFREE_CLIENT_SECRET}").encode()).decode()}
+        body = {"grant_type": "authorization_code", "code": auth_code, "redirect_uri": SPOTIFREE_REDIRECT_URI}
+    else:
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        body = {"grant_type": "client_credentials", "client_id": clientId, "client_secret": clientSecret}
+
     response = requests.post(requestLink, headers=headers, data=body)
 
-    print("API authentication: " + str(response.status_code))
-    spotifyToken = response.json()["access_token"]
+    print(f'API authentication (authCode: {authorizationCode}): ' + str(response.status_code))
+    json = response.json()
+    print(json)
+    spotifyToken = json["access_token"]
     writeTokenToFile(spotifyToken)
 
 
@@ -296,6 +419,7 @@ def printOptions():
     print("1: Search Youtube manually.")
     print("2: Download Spotify song using its link.")
     print("3: Download Spotify playlist using its link.")
+    print("4: Download your owned or followed Spotify playlists.")
     print("")
 
 
@@ -311,6 +435,7 @@ def main():
             case 1: searchYoutubeManually() 
             case 2: donwloadSpotifySong()
             case 3: downloadSpotifyPlaylist()
+            case 4: downloadUserPlaylists()
             
         print("\n")        
 

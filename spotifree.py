@@ -34,7 +34,7 @@ def downloadAudio(url, dir="/songs"):
     if stream is None:
         return False
 
-    print("\nDownloading: " + yt.title + "\nLink: " + url)
+    print("\n\nDownloading: " + yt.title + "\nLink: " + url)
     path = "SpotifreeLibrary" + dir
     stream.download(output_path=path)
     #ys = yt.streams.get_audio_only()
@@ -161,8 +161,8 @@ def getPlaylist(link):
     songsTitles = []
 
     for song in songs:
-        title = song["track"]["artists"][0]["name"] # first artist name
-        title += song["track"]["name"] + " " # song name
+        title = song["track"]["artists"][0]["name"] + " " # first artist name
+        title += song["track"]["name"] # song name
         songsTitles.append(title)
 
     info["songsTitles"] = songsTitles
@@ -246,7 +246,7 @@ def downloadSpotifyPlaylist():
             songsNotFound.append(songTitle)
 
     if songsNotFound == []:
-        print("Playlist downloaded successfully to folder: " + sanitizedPlaylistTitle)
+        print("\nPlaylist downloaded successfully to folder: " + sanitizedPlaylistTitle)
     else:
         print(f"It was not possible to download these {len(songsNotFound)} songs. "
             "Please search Youtube manually (option 1).\n")

@@ -1,27 +1,49 @@
 from pytubefix import Search, YouTube, Channel
 from pytubefix.cli import on_progress
-import requests 
-import os
-import math
+import requests, os, math, re
 
 # TODO:
-# song not found
+# song not found -> enable another itag?
 # age restriction
 
 API_PLAYLIST_SONG_LIMIT = 100
 spotifyToken = ""
 
 
+def sanitizePlaylistname(dir_name: str) -> str:
+    # Define characters to replace
+    invalid_chars = r'[\\/:"*?<>|]'  # Windows forbidden characters
+    
+    # Replace invalid characters with an underscore
+    sanitized_name = re.sub(invalid_chars, '_', dir_name)
+    
+    # Remove trailing spaces and periods
+    sanitized_name = sanitized_name.rstrip(' .')
+    
+    # Optionally replace spaces with underscores (uncomment if needed)
+    # sanitized_name = sanitized_name.replace(' ', '_')
+    
+    return sanitized_name
+
+
 def downloadAudio(url, dir="/songs"):
     yt = YouTube(url, on_progress_callback=on_progress)
     #print(yt.streams.filter(only_audio=True))
-    print("\nDownloading: " + yt.title + "\nlink: " + url)
 
     stream = yt.streams.get_by_itag(251)
+    if stream is None:
+        return False
+
+    print("\nDownloading: " + yt.title + "\nLink: " + url)
     path = "SpotifreeLibrary" + dir
     stream.download(output_path=path)
     #ys = yt.streams.get_audio_only()
     #ys.download(output_path="songs")
+    return True
+
+
+def getBestMatches(query):
+    return Search(query).videos
 
 
 def findFirstYoutubeLink(query):
@@ -72,7 +94,7 @@ def getSongTitle(link):
     response = requests.get(requestLink, headers=headers)
 
     statusCode = str(response.status_code)
-    print("api get track: " + statusCode)
+    print("API get track: " + statusCode)
     if statusCode == "401":
         authenticateSpotifyAPI(True)
         return getSongTitle(link)
@@ -80,7 +102,7 @@ def getSongTitle(link):
     json = response.json()
     song = json["name"]
     artist = json["artists"][0]["name"]
-    return song + " " + artist
+    return artist + " " + song
 
 
 def getPlaylist(link):
@@ -98,12 +120,19 @@ def getPlaylist(link):
 
     response = requests.get(requestLink, headers=headers, params=payload)
     statusCode = str(response.status_code)
-    print("api get playlist tracks: " + statusCode)
+    print("API get playlist tracks: " + statusCode)
+
     if statusCode == "401":
         authenticateSpotifyAPI(True)
         return getPlaylist(link)
 
+    if statusCode == "404":
+        print("It is not possible to download this playlist :(")
+        return {}
+
     json = response.json()
+    #print(json)
+
     playlistName = json["name"]
     songs = json["tracks"]["items"]
     totalSongNum = json["tracks"]["total"]
@@ -132,8 +161,8 @@ def getPlaylist(link):
     songsTitles = []
 
     for song in songs:
-        title = song["track"]["name"] + " " # song name
-        title += song["track"]["artists"][0]["name"] # first artist name
+        title = song["track"]["artists"][0]["name"] # first artist name
+        title += song["track"]["name"] + " " # song name
         songsTitles.append(title)
 
     info["songsTitles"] = songsTitles
@@ -163,10 +192,21 @@ def donwloadSpotifySong():
 
     songSpotifyLink = input("Spotify song link: ")
     songTitle = getSongTitle(songSpotifyLink)
-    print("songTitle: " + songTitle)
+    print("Song Title: " + songTitle)
 
-    url = findFirstYoutubeLink(songTitle)
-    downloadAudio(url)
+    videos = getBestMatches(songTitle)
+    # print("videos len: " + str(len(videos)))
+    idx = 0
+    success = False
+    
+    while not success and idx < len(videos):
+        success = downloadAudio(videos[idx].watch_url)
+        idx += 1
+
+    if success:
+        print("Song downloaded successfully.")
+    else:
+        print("It was not possible to download this song. Please search Youtube manually (option 1).")
 
 
 def downloadSpotifyPlaylist():
@@ -174,30 +214,55 @@ def downloadSpotifyPlaylist():
     playlistLink = input("Spotify playlist link: ")
 
     playlistInfo = getPlaylist(playlistLink) 
-    songsTitles = playlistInfo["songsTitles"]
-    playlistTitle = playlistInfo["title"]
-    playlistDir = "/playlists/" + playlistTitle
+    if (playlistInfo == {}):
+        return
 
-    print("\nTitle: " + playlistTitle)
+    songsTitles = playlistInfo["songsTitles"]
+    sanitizedPlaylistTitle = sanitizePlaylistname(playlistInfo["title"])
+    playlistDir = "/playlists/" + sanitizedPlaylistTitle
+
+    print("\nTitle: " + sanitizedPlaylistTitle)
     print("Number of songs: " + str(len(songsTitles)))
     print("First song title: " + songsTitles[0])
     print("Last song title: " + songsTitles[len(songsTitles)-1])
 
-    confirmation = input("\nAre these informations correct (y/n)? ")
+    confirmation = input("\nDo you want to continue (y/n)? ")
     if confirmation.lower() == "n":
         return
     
+    songsNotFound = []
+    
     for songTitle in songsTitles:
-        url = findFirstYoutubeLink(songTitle)
-        downloadAudio(url, playlistDir)
+        videos = getBestMatches(songTitle)
+        # print("videos len: " + str(len(videos)))
+        idx = 0
+        success = False
+        
+        while not success and idx < len(videos):
+            success = downloadAudio(videos[idx].watch_url, playlistDir)
+            idx += 1
+
+        if not success:
+            songsNotFound.append(songTitle)
+
+    if songsNotFound == []:
+        print("Playlist downloaded successfully to folder: " + sanitizedPlaylistTitle)
+    else:
+        print(f"It was not possible to download these {len(songsNotFound)} songs. "
+            "Please search Youtube manually (option 1).\n")
+
+        for songTitle in songsNotFound:
+            print(songTitle)
 
 
 def readTokenFromFile():
     f = open("spotifyToken.txt", "r")
     token = f.read()
     f.close()
+
     if not token == "":
-        print("token read from file")
+        print("Token read from file.")
+
     return token
 
 def writeTokenToFile(token):
@@ -221,7 +286,7 @@ def authenticateSpotifyAPI(tokenExpired=False):
     body = {"grant_type": "client_credentials", "client_id": clientId, "client_secret": clientSecret}
     response = requests.post(requestLink, headers=headers, data=body)
 
-    print("api authentication: " + str(response.status_code))
+    print("API authentication: " + str(response.status_code))
     spotifyToken = response.json()["access_token"]
     writeTokenToFile(spotifyToken)
 

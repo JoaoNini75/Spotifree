@@ -1,4 +1,4 @@
-from pytubefix import Search, YouTube, Channel
+from pytubefix import Search, YouTube, Channel, Playlist
 from pytubefix.cli import on_progress
 from flask import Flask, request, redirect
 import requests, os, math, re, os.path, webbrowser, threading, time, urllib.parse, base64
@@ -8,6 +8,7 @@ import requests, os, math, re, os.path, webbrowser, threading, time, urllib.pars
 # refresh token
 # song not found -> enable another itag?
 # age restriction?
+# + audio quality and/or less file size?
 
 
 SPOTIFREE_CLIENT_ID = os.environ["SPOTIFREE_CLIENT_ID"]
@@ -98,7 +99,7 @@ def requestUserAuthorization():
         print("Error:\n", response.json())
 
 
-def sanitizePlaylistname(dir_name: str) -> str:
+def sanitizePlaylistName(dir_name: str) -> str:
     # Define characters to replace
     invalid_chars = r'[\\/:"*?<>|]'  # Windows forbidden characters
     
@@ -306,7 +307,7 @@ def downloadSpotifyPlaylist():
         return
 
     songsTitles = playlistInfo["songsTitles"]
-    sanitizedPlaylistTitle = sanitizePlaylistname(playlistInfo["title"])
+    sanitizedPlaylistTitle = sanitizePlaylistName(playlistInfo["title"])
     playlistDir = "/playlists/" + sanitizedPlaylistTitle
 
     print("\nTitle: " + sanitizedPlaylistTitle)
@@ -364,6 +365,35 @@ def downloadUserPlaylists():
     print(json)
 
 
+def downloadYoutubeSong():
+    url = input("Youtube song link: ")
+    downloadAudio(url)
+    print("\n\nSong downloaded successfully.")
+
+
+def downloadYoutubePlaylist():
+    url = input("Youtube playlist link: ")
+    playlist = Playlist(url)
+    
+    sanitizedName = sanitizePlaylistName(playlist.title)
+    playlistDir = "/playlists/" + sanitizedName
+    videos = playlist.videos
+
+    print("\nTitle: " + sanitizedName)
+    print("Number of songs: " + str(len(videos)))
+    print("First song title: " + videos[0].title)
+    print("Last song title: " + videos[len(videos) - 1].title)
+
+    confirmation = input("\nDo you want to continue (y/n)? ")
+    if confirmation.lower() == "n":
+        return
+
+    for video in videos:
+        downloadAudio(video.watch_url, playlistDir)
+
+    print("\n\nPlaylist downloaded successfully to folder: " + sanitizedName)
+
+
 def readTokenFromFile():
     if not os.path.isfile(SPOTIFY_TOKEN_FILENAME):
         f = open(SPOTIFY_TOKEN_FILENAME, "x")
@@ -416,10 +446,14 @@ def authenticateSpotifyAPI(tokenExpired=False, authorizationCode=False):
 
 def printOptions():
     print("0: Exit.")
-    print("1: Search Youtube manually.")
-    print("2: Download Spotify song using its link.")
-    print("3: Download Spotify playlist using its link.")
-    print("4: Download your owned or followed Spotify playlists.")
+    print("")
+    print("1: Search Youtube.")
+    print("2: Download Youtube song using its link.")
+    print("3: Download Youtube playlist using its link.")
+    print("")
+    print("4: Download Spotify song using its link.")
+    print("5: Download Spotify playlist using its link.")
+    print("6: Download your owned or followed Spotify playlists.")
     print("")
 
 
@@ -433,9 +467,12 @@ def main():
         
         match option:
             case 1: searchYoutubeManually() 
-            case 2: donwloadSpotifySong()
-            case 3: downloadSpotifyPlaylist()
-            case 4: downloadUserPlaylists()
+            case 2: downloadYoutubeSong()
+            case 3: downloadYoutubePlaylist()
+
+            case 4: donwloadSpotifySong()
+            case 5: downloadSpotifyPlaylist()
+            case 6: downloadUserPlaylists()
             
         print("\n")        
 

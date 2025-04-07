@@ -1,16 +1,19 @@
 from pytubefix import Search, YouTube, Channel, Playlist
 from pytubefix.cli import on_progress
 from flask import Flask, request, redirect
+from dotenv import load_dotenv
 import requests, os, math, re, os.path, webbrowser, threading, time, urllib.parse, base64
 
 
 # TODO:
+# get new authentication method right
 # refresh token
-# song not found -> enable another itag?
 # age restriction?
+# song not found -> enable another itag?
 # + audio quality and/or less file size?
 
 
+load_dotenv()
 SPOTIFREE_CLIENT_ID = os.environ["SPOTIFREE_CLIENT_ID"]
 SPOTIFREE_CLIENT_SECRET = os.environ["SPOTIFREE_CLIENT_SECRET"]
 SPOTIFREE_REDIRECT_URI = "http://127.0.0.1:3000/callback"
@@ -446,11 +449,11 @@ def authenticateSpotifyAPI(tokenExpired=False, authorizationCode=False):
 
 def printOptions():
     print("0: Exit.")
-    print("")
+    
     print("1: Search Youtube.")
     print("2: Download Youtube song using its link.")
     print("3: Download Youtube playlist using its link.")
-    print("")
+    
     print("4: Download Spotify song using its link.")
     print("5: Download Spotify playlist using its link.")
     print("6: Download your owned or followed Spotify playlists.")

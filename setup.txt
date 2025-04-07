@@ -1,0 +1,31 @@
+Pre-requisites:
+    - Unix based OS 
+    - Python 3.10 or newer
+
+
+Install dependencies:
+    sudo apt-get install python3-pip
+    pip install pytubefix
+    pip install requests
+    pip install flask
+    pip install python-dotenv
+
+
+Create Spotify developer app:
+    To create an app, go to https://developer.spotify.com/dashboard, 
+    click on the Create an app button and enter the following information:
+        Redirect URIs: http://127.0.0.1:3000/callback
+        API/SDKs: Web API
+
+    You do not need to write anything for the rest of the variables, 
+    expect for App Name and App description, where you are free to write
+    whatever you want.
+
+
+Setup environment variables:
+    Go to https://developer.spotify.com/dashboard -> app you just created ->
+    Settings and copy the client ID and client secret, which is hidden by 
+    default. Now, paste those in the .env file which is in the same directory
+    as this one, like this:
+        SPOTIFREE_CLIENT_ID=exampleID
+        SPOTIFREE_CLIENT_SECRET=exampleSecret

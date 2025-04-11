@@ -1,5 +1,5 @@
 Pre-requisites:
-    - Unix based OS 
+    - Unix based OS (not tested on Win or Mac)
     - Python 3.10 or newer
 
 

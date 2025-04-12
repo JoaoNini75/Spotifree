@@ -7,11 +7,10 @@ import requests, os, math, re, os.path, webbrowser, threading, time, urllib.pars
 
 
 # TODO:
-# option 6: allow choosing playlists
+# age restriction?
 # song not found -> enable another itag?
 # + audio quality and/or less file size?
-# age restriction?
-# refresh token
+# refresh token / improve auth
 
 
 load_dotenv()
@@ -292,7 +291,7 @@ def downloadYoutubePlaylist():
     for video in videos:
         downloadAudio(video.watch_url, playlistDir)
 
-    print("\n\nPlaylist downloaded successfully to folder: " + sanitizedName)
+    print("\n\nPlaylist downloaded successfully to folder: " + sanitizedName + "\n")
 
 
 def donwloadSpotifySong():
@@ -381,21 +380,87 @@ def downloadUserPlaylists():
 
     response = requests.get(requestLink, headers=headers, params=payload)
     statusCode = str(response.status_code)
-    print("API get user playlists: " + statusCode)
+    print("API get user playlists: " + statusCode + "\n")
 
     if statusCode == "401":
         authenticateSpotifyAPI(True, True)
         return downloadUserPlaylists()
 
     json = response.json()
-
     playlists = json["items"]
+    idx = 0
 
     for playlist in playlists:
-        #print(playlist["external_urls"]["spotify"])
-        downloadSpotifyPlaylist(playlist["external_urls"]["spotify"], False)
+        print(str(idx) + " - " + playlist["name"])
+        idx += 1
+    
+    print("\nChoose the playlists you want to download using:")
+    printPlaylistChoiceFormat()
+
+    while True:
+        answer = input("\nPlaylists to download: ")
+        playlistsToDownload = getPlsToDownload(answer, len(playlists))
+
+        if playlistsToDownload == []:
+            print("Please check the format you are using:")
+            printPlaylistChoiceFormat()
+        else:
+            break
+
+    print()
+    idx = -1
+
+    for playlist in playlists:
+        idx += 1
+        if playlistsToDownload[idx]:
+            print(playlist["name"])
+
+    confirmation = input("\nDo you want to continue (y/n)? ")
+    if confirmation.lower() == "n":
+            return
+
+    idx = -1
+    print()
+
+    for playlist in playlists:
+        idx += 1
+        if playlistsToDownload[idx]:
+            # print(playlist["name"])
+            downloadSpotifyPlaylist(playlist["external_urls"]["spotify"], False)
 
     print("\n\nThe download of your owned or followed Spotify playlists has finished.")
+
+
+def printPlaylistChoiceFormat():
+    print("Comma separated playlist numbers: 0,3,5")
+    print("Or intervals: 2-4")
+    print("Or a combination of both: 1-4,8-10,12-13")
+
+
+def getPlsToDownload(answer, maxPlaylistNum):
+    result = [False] * maxPlaylistNum
+    noDownloads = True
+    parts = answer.split(',')
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            for i in range(start, end + 1):
+                if 0 <= i < maxPlaylistNum:
+                    result[i] = True
+                    noDownloads = False
+        else:
+            i = int(part)
+            if 0 <= i < maxPlaylistNum:
+                result[i] = True
+                noDownloads = False
+
+    if noDownloads:
+        return []      
+    return result
 
 
 def readTokensFromFile():
@@ -421,6 +486,7 @@ def readTokensFromFile():
 
 
 def saveTokensToFile():
+    open(TOKENS_FILENAME, "w").close() # clear file contents
     f = open(TOKENS_FILENAME, "w")
     f.write(authCode + "\n")
     f.write(accessToken)
@@ -442,18 +508,12 @@ def authenticateSpotifyAPI(tokenExpired=False, useAuthorizationCode=False):
     if validToken(accessToken) and not tokenExpired and not useAuthorizationCode:
         return
     
-    print("REACHED HERE 1")
     if useAuthorizationCode and not validToken(authCode):
-        print("REACHED HERE 2")
         if validToken(tokens["authCode"]):
-            print("REACHED HERE 3")
             authCode = tokens["authCode"]
         else:
-            print("REACHED HERE 4")
             requestUserAuthorization()
             
-    print("REACHED HERE 5")
-    # print("authenticating in Spotify API...")
     clientId = os.environ["SPOTIFREE_CLIENT_ID"]
     clientSecret = os.environ["SPOTIFREE_CLIENT_SECRET"]
 
@@ -515,7 +575,7 @@ def main():
             
         print("\n")        
 
-    print("Spotifree finished.")
+    print("Spotifree finished.\n")
 
 
 main()

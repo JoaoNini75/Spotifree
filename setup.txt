@@ -29,3 +29,6 @@ Setup environment variables:
     as this one, like this:
         SPOTIFREE_CLIENT_ID=exampleID
         SPOTIFREE_CLIENT_SECRET=exampleSecret
+
+    IMPORTANT SECURITY NOTE: do not share any of this data or the contents of the
+    tokens.txt file, as they may allow other users to enter your Spotify account.

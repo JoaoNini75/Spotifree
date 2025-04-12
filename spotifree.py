@@ -76,6 +76,10 @@ def requestUserAuthorization():
     if not authCode_event.wait(timeout=60):  # Wait up to 60 seconds
         print("Error: Authorization timed out.")
         return requestUserAuthorization()
+    
+
+def printLog(text):
+    print("\033[90mLog: " + text + "\033[0m")
 
 
 def sanitizePlaylistName(dir_name: str) -> str:
@@ -172,7 +176,7 @@ def getSongTitle(link):
     response = requests.get(requestLink, headers=headers)
 
     statusCode = str(response.status_code)
-    print("API get track: " + statusCode)
+    printLog("API get track: " + statusCode)
     if statusCode == "401":
         authenticateSpotifyAPI(True)
         return getSongTitle(link)
@@ -198,7 +202,7 @@ def getPlaylist(link):
 
     response = requests.get(requestLink, headers=headers, params=payload)
     statusCode = str(response.status_code)
-    print("API get playlist tracks: " + statusCode)
+    printLog("API get playlist tracks: " + statusCode)
 
     if statusCode == "401":
         authenticateSpotifyAPI(True)
@@ -380,7 +384,7 @@ def downloadUserPlaylists():
 
     response = requests.get(requestLink, headers=headers, params=payload)
     statusCode = str(response.status_code)
-    print("API get user playlists: " + statusCode + "\n")
+    printLog("API get user playlists: " + statusCode + "\n")
 
     if statusCode == "401":
         authenticateSpotifyAPI(True, True)
@@ -477,7 +481,7 @@ def readTokensFromFile():
     f.close()
 
     if len(tokens) == 0:
-        print("LEN == 0!!!")
+        printLog("LEN == 0!!!")
         return { "authCode" : "", "accessToken" : "" }
     
     authCode = tokens[0]
@@ -531,8 +535,8 @@ def authenticateSpotifyAPI(tokenExpired=False, useAuthorizationCode=False):
     json = response.json()
     statusCode = response.status_code
 
-    print(f'API authentication (using authCode: {useAuthorizationCode}): ' + str(statusCode))
-    print(json)
+    printLog(f'API authentication (using authCode: {useAuthorizationCode}): ' + str(statusCode))
+    printLog(json)
 
     if statusCode == 400 and json["error_description"] == "Invalid authorization code":
         requestUserAuthorization()

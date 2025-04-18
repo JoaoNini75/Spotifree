@@ -472,6 +472,10 @@ def getPlsToDownload(answer, maxPlaylistNum):
     return result
 
 
+def clearTokensFile():
+    open(TOKENS_FILENAME, "w").close()
+
+
 def readTokensFromFile():
     global authCode
     global accessToken
@@ -489,13 +493,17 @@ def readTokensFromFile():
         printLog("LEN == 0!!!")
         return { "authCode" : "", "accessToken" : "" }
     
+    if len(tokens) == 1:
+        clearTokensFile()
+        return { "authCode" : "", "accessToken" : "" }
+    
     authCode = tokens[0]
     accessToken = tokens[1]
     return { "authCode" : tokens[0], "accessToken" : tokens[1] }
 
 
 def saveTokensToFile():
-    open(TOKENS_FILENAME, "w").close() # clear file contents
+    clearTokensFile()
     f = open(TOKENS_FILENAME, "w")
     f.write(authCode + "\n")
     f.write(accessToken)

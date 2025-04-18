@@ -81,6 +81,11 @@ def requestUserAuthorization():
 def printLog(text):
     print("\033[90mLog: " + text + "\033[0m")
 
+def printLogDict(dictToPrint):
+    print("\033[90mLog: ")
+    print(dictToPrint)
+    print("\033[0m")
+
 
 def sanitizePlaylistName(dir_name: str) -> str:
     # Define characters to replace
@@ -536,7 +541,7 @@ def authenticateSpotifyAPI(tokenExpired=False, useAuthorizationCode=False):
     statusCode = response.status_code
 
     printLog(f'API authentication (using authCode: {useAuthorizationCode}): ' + str(statusCode))
-    printLog(json)
+    printLogDict(json)
 
     if statusCode == 400 and json["error_description"] == "Invalid authorization code":
         requestUserAuthorization()
